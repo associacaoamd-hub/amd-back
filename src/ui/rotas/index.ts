@@ -1,0 +1,17 @@
+import { Router } from 'express';
+import autenticacaoRotas from './autenticacaoRotas';
+import noticiaRotas from './noticiaRotas';
+import projetoRotas from './projetoRotas';
+import galeriaRotas from './galeriaRotas';
+import documentoRotas from './documentoRotas';
+import contatoRotas from './contatoRotas';
+import membroRotas from './membroRotas';
+const router = Router();
+router.use('/auth', autenticacaoRotas);
+router.use('/noticias', noticiaRotas);
+router.use('/projetos', projetoRotas);
+router.use('/galeria', galeriaRotas);
+router.use('/documentos', documentoRotas);
+router.use('/contato', contatoRotas);
+router.use('/membros', membroRotas);
+export default router;

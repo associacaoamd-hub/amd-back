@@ -1,0 +1,10 @@
+import { Router } from 'express';
+import { ContatoControlador } from '../controladores/ContatoControlador';
+import { autenticar } from '../middlewares/autenticacaoMiddleware';
+const router = Router();
+const ctrl = new ContatoControlador();
+router.post('/', (req, res) => ctrl.enviar(req, res));
+router.get('/', autenticar, (req, res) => ctrl.listar(req, res));
+router.put('/:id/lido', autenticar, (req, res) => ctrl.marcarLido(req as any, res));
+router.delete('/:id', autenticar, (req, res) => ctrl.deletar(req, res));
+export default router;

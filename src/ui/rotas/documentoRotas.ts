@@ -1,0 +1,11 @@
+import { Router } from 'express';
+import { DocumentoControlador } from '../controladores/DocumentoControlador';
+import { autenticar } from '../middlewares/autenticacaoMiddleware';
+import { upload } from '@servicosTecnicos/uploads/multerConfig';
+const router = Router();
+const ctrl = new DocumentoControlador();
+router.get('/', (req, res) => ctrl.listar(req, res));
+router.get('/admin/todos', autenticar, (req, res) => ctrl.listarAdmin(req, res));
+router.post('/', autenticar, upload.single('arquivo'), (req, res) => ctrl.criar(req as any, res));
+router.delete('/:id', autenticar, (req, res) => ctrl.deletar(req, res));
+export default router;

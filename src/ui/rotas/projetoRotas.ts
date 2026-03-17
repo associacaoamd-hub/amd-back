@@ -1,0 +1,12 @@
+import { Router } from 'express';
+import { ProjetoControlador } from '../controladores/ProjetoControlador';
+import { autenticar } from '../middlewares/autenticacaoMiddleware';
+import { upload } from '@servicosTecnicos/uploads/multerConfig';
+const router = Router();
+const ctrl = new ProjetoControlador();
+router.get('/', (req, res) => ctrl.listar(req, res));
+router.get('/:id', (req, res) => ctrl.buscarPorId(req, res));
+router.post('/', autenticar, upload.single('imagem'), (req, res) => ctrl.criar(req as any, res));
+router.put('/:id', autenticar, upload.single('imagem'), (req, res) => ctrl.atualizar(req as any, res));
+router.delete('/:id', autenticar, (req, res) => ctrl.deletar(req, res));
+export default router;
