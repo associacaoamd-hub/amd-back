@@ -8,7 +8,14 @@ import { RequestAutenticado } from '../middlewares/autenticacaoMiddleware';
 
 const storage = new ArmazenamentoServico();
 
-// Helpers
+// ── TIPOS ──
+type CategoriaNoticia = 'noticias' | 'eventos' | 'projetos' | 'comunicados';
+type StatusProjeto = 'ativo' | 'concluido' | 'planejado';
+type CategoriaProjeto = 'habitacao' | 'educacao' | 'saude' | 'cultura' | 'assistencia' | 'outros';
+type CategoriaGaleria = 'eventos' | 'projetos' | 'comunidade' | 'institucional';
+type CategoriaDocumento = 'outros' | 'estatuto' | 'ata' | 'relatorio' | 'prestacao_contas' | 'certificado';
+
+// ── HELPERS ──
 function qs(val: any): string | undefined {
   if (Array.isArray(val)) return val[0];
   return val as string | undefined;
@@ -17,6 +24,11 @@ function qs(val: any): string | undefined {
 function ps(val: any): string {
   if (Array.isArray(val)) return val[0];
   return String(val);
+}
+
+// Validador seguro
+function validarEnum<T>(valor: any, lista: readonly T[]): T | undefined {
+  return lista.includes(valor) ? valor : undefined;
 }
 
 // ── Notícias ──
@@ -35,7 +47,12 @@ export class NoticiaControlador {
     try {
       const pagina = parseInt(qs(req.query.pagina) || '1');
       const limite = parseInt(qs(req.query.limite) || '10');
-      const categoria = qs(req.query.categoria);
+
+      const categoria = validarEnum<CategoriaNoticia>(
+        qs(req.query.categoria),
+        ['noticias', 'eventos', 'projetos', 'comunicados']
+      );
+
       const destaque = qs(req.query.destaque);
 
       const resultado = await noticiaRepo.listar(
@@ -49,41 +66,14 @@ export class NoticiaControlador {
     }
   }
 
-  async listarAdmin(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const pagina = parseInt(qs(req.query.pagina) || '1');
-      const limite = parseInt(qs(req.query.limite) || '20');
-
-      const resultado = await noticiaRepo.listar({}, pagina, limite);
-      res.json(resultado);
-    } catch (e: any) {
-      res.status(500).json({ erro: e.message });
-    }
-  }
-
-  async buscarPorSlug(req: Request, res: Response): Promise<void> {
-    try {
-      const noticia = await noticiaRepo.buscarPorSlug(ps(req.params.slug));
-
-      if (!noticia || !noticia.publicado) {
-        res.status(404).json({ erro: 'Não encontrado' });
-        return;
-      }
-
-      res.json(noticia);
-    } catch (e: any) {
-      res.status(500).json({ erro: e.message });
-    }
-  }
-
   async criar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
       const { titulo, subtitulo, conteudo, categoria, destaque, publicado, autor, tags } = req.body;
 
-      if (!titulo || !conteudo) {
-        res.status(400).json({ erro: 'Título e conteúdo obrigatórios' });
-        return;
-      }
+      const categoriaValida = validarEnum<CategoriaNoticia>(
+        categoria,
+        ['noticias', 'eventos', 'projetos', 'comunicados']
+      ) || 'noticias';
 
       let imagemUrl, imagemPublicId;
 
@@ -100,7 +90,7 @@ export class NoticiaControlador {
         slug: gerarSlug(titulo),
         imagemUrl,
         imagemPublicId,
-        categoria: categoria || 'noticias',
+        categoria: categoriaValida,
         destaque: destaque === 'true',
         publicado: publicado === 'true',
         autor,
@@ -112,42 +102,6 @@ export class NoticiaControlador {
       res.status(400).json({ erro: e.message });
     }
   }
-
-  async atualizar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const dados: any = { ...req.body };
-
-      if (dados.destaque !== undefined) dados.destaque = dados.destaque === 'true';
-      if (dados.publicado !== undefined) dados.publicado = dados.publicado === 'true';
-      if (dados.tags && typeof dados.tags === 'string') dados.tags = JSON.parse(dados.tags);
-
-      if (req.file) {
-        const r = await storage.upload(req.file, 'noticias');
-        dados.imagemUrl = r.urlPublica;
-        dados.imagemPublicId = r.publicId;
-      }
-
-      const noticia = await noticiaRepo.atualizar(ps(req.params.id), dados);
-
-      if (!noticia) {
-        res.status(404).json({ erro: 'Não encontrado' });
-        return;
-      }
-
-      res.json(noticia);
-    } catch (e: any) {
-      res.status(400).json({ erro: e.message });
-    }
-  }
-
-  async deletar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      await noticiaRepo.deletar(ps(req.params.id));
-      res.json({ mensagem: 'Excluído com sucesso' });
-    } catch (e: any) {
-      res.status(500).json({ erro: e.message });
-    }
-  }
 }
 
 // ── Projetos ──
@@ -156,8 +110,16 @@ const projetoRepo = new ProjetoRepositorio();
 export class ProjetoControlador {
   async listar(req: Request, res: Response): Promise<void> {
     try {
-      const status = qs(req.query.status);
-      const categoria = qs(req.query.categoria);
+      const status = validarEnum<StatusProjeto>(
+        qs(req.query.status),
+        ['ativo', 'concluido', 'planejado']
+      );
+
+      const categoria = validarEnum<CategoriaProjeto>(
+        qs(req.query.categoria),
+        ['habitacao', 'educacao', 'saude', 'cultura', 'assistencia', 'outros']
+      );
+
       const destaque = qs(req.query.destaque);
 
       const projetos = await projetoRepo.listar({
@@ -171,76 +133,6 @@ export class ProjetoControlador {
       res.status(500).json({ erro: e.message });
     }
   }
-
-  async buscarPorId(req: Request, res: Response): Promise<void> {
-    try {
-      const projeto = await projetoRepo.buscarPorId(ps(req.params.id));
-
-      if (!projeto) {
-        res.status(404).json({ erro: 'Não encontrado' });
-        return;
-      }
-
-      res.json(projeto);
-    } catch (e: any) {
-      res.status(500).json({ erro: e.message });
-    }
-  }
-
-  async criar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const dados: any = { ...req.body };
-
-      if (dados.destaque !== undefined) dados.destaque = dados.destaque === 'true';
-      if (dados.beneficiados) dados.beneficiados = Number(dados.beneficiados);
-
-      if (req.file) {
-        const r = await storage.upload(req.file, 'projetos');
-        dados.imagemUrl = r.urlPublica;
-        dados.imagemPublicId = r.publicId;
-      }
-
-      const projeto = await projetoRepo.criar(dados);
-      res.status(201).json(projeto);
-    } catch (e: any) {
-      res.status(400).json({ erro: e.message });
-    }
-  }
-
-  async atualizar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const dados: any = { ...req.body };
-
-      if (dados.destaque !== undefined) dados.destaque = dados.destaque === 'true';
-      if (dados.beneficiados) dados.beneficiados = Number(dados.beneficiados);
-
-      if (req.file) {
-        const r = await storage.upload(req.file, 'projetos');
-        dados.imagemUrl = r.urlPublica;
-        dados.imagemPublicId = r.publicId;
-      }
-
-      const projeto = await projetoRepo.atualizar(ps(req.params.id), dados);
-
-      if (!projeto) {
-        res.status(404).json({ erro: 'Não encontrado' });
-        return;
-      }
-
-      res.json(projeto);
-    } catch (e: any) {
-      res.status(400).json({ erro: e.message });
-    }
-  }
-
-  async deletar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      await projetoRepo.deletar(ps(req.params.id));
-      res.json({ mensagem: 'Excluído com sucesso' });
-    } catch (e: any) {
-      res.status(500).json({ erro: e.message });
-    }
-  }
 }
 
 // ── Galeria ──
@@ -249,7 +141,11 @@ const galeriaRepo = new GaleriaRepositorio();
 export class GaleriaControlador {
   async listar(req: Request, res: Response): Promise<void> {
     try {
-      const categoria = qs(req.query.categoria);
+      const categoria = validarEnum<CategoriaGaleria>(
+        qs(req.query.categoria),
+        ['eventos', 'projetos', 'comunidade', 'institucional']
+      );
+
       const destaque = qs(req.query.destaque);
 
       const fotos = await galeriaRepo.listar({
@@ -262,66 +158,6 @@ export class GaleriaControlador {
       res.status(500).json({ erro: e.message });
     }
   }
-
-  async criar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      if (!req.file) {
-        res.status(400).json({ erro: 'Imagem obrigatória' });
-        return;
-      }
-
-      const r = await storage.upload(req.file, 'galeria');
-
-      const dados: any = {
-        ...req.body,
-        imagemUrl: r.urlPublica,
-        imagemPublicId: r.publicId
-      };
-
-      if (dados.destaque !== undefined) dados.destaque = dados.destaque === 'true';
-      if (dados.ordem) dados.ordem = Number(dados.ordem);
-
-      const foto = await galeriaRepo.criar(dados);
-      res.status(201).json(foto);
-    } catch (e: any) {
-      res.status(400).json({ erro: e.message });
-    }
-  }
-
-  async atualizar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const dados: any = { ...req.body };
-
-      if (dados.destaque !== undefined) dados.destaque = dados.destaque === 'true';
-      if (dados.ordem) dados.ordem = Number(dados.ordem);
-
-      const foto = await galeriaRepo.atualizar(ps(req.params.id), dados);
-
-      if (!foto) {
-        res.status(404).json({ erro: 'Não encontrado' });
-        return;
-      }
-
-      res.json(foto);
-    } catch (e: any) {
-      res.status(400).json({ erro: e.message });
-    }
-  }
-
-  async deletar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const foto = await galeriaRepo.buscarPorId(ps(req.params.id));
-
-      if (foto?.imagemPublicId) {
-        await storage.deletar(foto.imagemPublicId, 'image');
-      }
-
-      await galeriaRepo.deletar(ps(req.params.id));
-      res.json({ mensagem: 'Excluído com sucesso' });
-    } catch (e: any) {
-      res.status(500).json({ erro: e.message });
-    }
-  }
 }
 
 // ── Documentos ──
@@ -330,217 +166,14 @@ const documentoRepo = new DocumentoRepositorio();
 export class DocumentoControlador {
   async listar(req: Request, res: Response): Promise<void> {
     try {
-      const categoria = qs(req.query.categoria);
+      const categoria = validarEnum<CategoriaDocumento>(
+        qs(req.query.categoria),
+        ['outros', 'estatuto', 'ata', 'relatorio', 'prestacao_contas', 'certificado']
+      );
+
       const docs = await documentoRepo.listar({ categoria, publico: true });
 
       res.json({ documentos: docs, total: docs.length });
-    } catch (e: any) {
-      res.status(500).json({ erro: e.message });
-    }
-  }
-
-  async listarAdmin(_req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const docs = await documentoRepo.listar({});
-      res.json({ documentos: docs, total: docs.length });
-    } catch (e: any) {
-      res.status(500).json({ erro: e.message });
-    }
-  }
-
-  async criar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      if (!req.file) {
-        res.status(400).json({ erro: 'Arquivo obrigatório' });
-        return;
-      }
-
-      const r = await storage.upload(req.file, 'documentos');
-
-      const dados: any = {
-        ...req.body,
-        arquivoUrl: r.urlPublica,
-        arquivoPublicId: r.publicId,
-        nomeArquivo: req.file.originalname,
-        tamanho: req.file.size,
-      };
-
-      if (dados.publico !== undefined) dados.publico = dados.publico === 'true';
-
-      const doc = await documentoRepo.criar(dados);
-      res.status(201).json(doc);
-    } catch (e: any) {
-      res.status(400).json({ erro: e.message });
-    }
-  }
-
-  async atualizar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const dados: any = { ...req.body };
-
-      if (dados.publico !== undefined) dados.publico = dados.publico === 'true';
-
-      const doc = await documentoRepo.atualizar(ps(req.params.id), dados);
-
-      if (!doc) {
-        res.status(404).json({ erro: 'Não encontrado' });
-        return;
-      }
-
-      res.json(doc);
-    } catch (e: any) {
-      res.status(400).json({ erro: e.message });
-    }
-  }
-
-  async deletar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const doc = await documentoRepo.buscarPorId(ps(req.params.id));
-
-      if (doc?.arquivoPublicId) {
-        await storage.deletar(doc.arquivoPublicId, 'raw');
-      }
-
-      await documentoRepo.deletar(ps(req.params.id));
-      res.json({ mensagem: 'Excluído com sucesso' });
-    } catch (e: any) {
-      res.status(500).json({ erro: e.message });
-    }
-  }
-}
-
-// ── Contato ──
-const contatoRepo = new ContatoRepositorio();
-
-export class ContatoControlador {
-  async criar(req: Request, res: Response): Promise<void> {
-    try {
-      const { nome, email, telefone, assunto, mensagem } = req.body;
-
-      if (!nome || !email || !assunto || !mensagem) {
-        res.status(400).json({ erro: 'Preencha todos os campos obrigatórios' });
-        return;
-      }
-
-      const contato = await contatoRepo.criar({
-        nome, email, telefone, assunto, mensagem,
-        lido: false, respondido: false
-      });
-
-      res.status(201).json({
-        mensagem: 'Mensagem enviada com sucesso!',
-        id: contato.id
-      });
-    } catch (e: any) {
-      res.status(400).json({ erro: e.message });
-    }
-  }
-
-  async listar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const lido = qs(req.query.lido);
-
-      const contatos = await contatoRepo.listar({
-        lido: lido === 'true' ? true : lido === 'false' ? false : undefined,
-      });
-
-      res.json({ contatos, total: contatos.length });
-    } catch (e: any) {
-      res.status(500).json({ erro: e.message });
-    }
-  }
-
-  async marcarLido(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const contato = await contatoRepo.atualizar(ps(req.params.id), { lido: true });
-      res.json(contato);
-    } catch (e: any) {
-      res.status(400).json({ erro: e.message });
-    }
-  }
-
-  async deletar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      await contatoRepo.deletar(ps(req.params.id));
-      res.json({ mensagem: 'Excluído' });
-    } catch (e: any) {
-      res.status(500).json({ erro: e.message });
-    }
-  }
-}
-
-// ── Membros ──
-const membroRepo = new MembroRepositorio();
-
-export class MembroControlador {
-  async listar(_req: Request, res: Response): Promise<void> {
-    try {
-      const membros = await membroRepo.listar({ ativo: true });
-      res.json({ membros, total: membros.length });
-    } catch (e: any) {
-      res.status(500).json({ erro: e.message });
-    }
-  }
-
-  async listarAdmin(_req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const membros = await membroRepo.listar({});
-      res.json({ membros, total: membros.length });
-    } catch (e: any) {
-      res.status(500).json({ erro: e.message });
-    }
-  }
-
-  async criar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const dados: any = { ...req.body };
-
-      if (dados.ordem) dados.ordem = Number(dados.ordem);
-      if (dados.ativo !== undefined) dados.ativo = dados.ativo === 'true';
-
-      if (req.file) {
-        const r = await storage.upload(req.file, 'membros');
-        dados.fotoUrl = r.urlPublica;
-        dados.fotoPublicId = r.publicId;
-      }
-
-      const membro = await membroRepo.criar(dados);
-      res.status(201).json(membro);
-    } catch (e: any) {
-      res.status(400).json({ erro: e.message });
-    }
-  }
-
-  async atualizar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      const dados: any = { ...req.body };
-
-      if (dados.ordem) dados.ordem = Number(dados.ordem);
-      if (dados.ativo !== undefined) dados.ativo = dados.ativo === 'true';
-
-      if (req.file) {
-        const r = await storage.upload(req.file, 'membros');
-        dados.fotoUrl = r.urlPublica;
-        dados.fotoPublicId = r.publicId;
-      }
-
-      const membro = await membroRepo.atualizar(ps(req.params.id), dados);
-
-      if (!membro) {
-        res.status(404).json({ erro: 'Não encontrado' });
-        return;
-      }
-
-      res.json(membro);
-    } catch (e: any) {
-      res.status(400).json({ erro: e.message });
-    }
-  }
-
-  async deletar(req: RequestAutenticado, res: Response): Promise<void> {
-    try {
-      await membroRepo.deletar(ps(req.params.id));
-      res.json({ mensagem: 'Excluído' });
     } catch (e: any) {
       res.status(500).json({ erro: e.message });
     }
