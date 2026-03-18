@@ -8,10 +8,15 @@ import { RequestAutenticado } from '../middlewares/autenticacaoMiddleware';
 
 const storage = new ArmazenamentoServico();
 
-// Helper para extrair string do query param
+// Helpers
 function qs(val: any): string | undefined {
   if (Array.isArray(val)) return val[0];
   return val as string | undefined;
+}
+
+function ps(val: any): string {
+  if (Array.isArray(val)) return val[0];
+  return String(val);
 }
 
 // ── Notícias ──
@@ -32,71 +37,116 @@ export class NoticiaControlador {
       const limite = parseInt(qs(req.query.limite) || '10');
       const categoria = qs(req.query.categoria);
       const destaque = qs(req.query.destaque);
+
       const resultado = await noticiaRepo.listar(
         { categoria, publicado: true, destaque: destaque === 'true' ? true : undefined },
         pagina, limite
       );
+
       res.json(resultado);
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 
   async listarAdmin(req: RequestAutenticado, res: Response): Promise<void> {
     try {
       const pagina = parseInt(qs(req.query.pagina) || '1');
       const limite = parseInt(qs(req.query.limite) || '20');
+
       const resultado = await noticiaRepo.listar({}, pagina, limite);
       res.json(resultado);
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 
   async buscarPorSlug(req: Request, res: Response): Promise<void> {
     try {
-      const noticia = await noticiaRepo.buscarPorSlug(req.params.slug);
-      if (!noticia || !noticia.publicado) { res.status(404).json({ erro: 'Não encontrado' }); return; }
+      const noticia = await noticiaRepo.buscarPorSlug(ps(req.params.slug));
+
+      if (!noticia || !noticia.publicado) {
+        res.status(404).json({ erro: 'Não encontrado' });
+        return;
+      }
+
       res.json(noticia);
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 
   async criar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
       const { titulo, subtitulo, conteudo, categoria, destaque, publicado, autor, tags } = req.body;
-      if (!titulo || !conteudo) { res.status(400).json({ erro: 'Título e conteúdo obrigatórios' }); return; }
+
+      if (!titulo || !conteudo) {
+        res.status(400).json({ erro: 'Título e conteúdo obrigatórios' });
+        return;
+      }
+
       let imagemUrl, imagemPublicId;
+
       if (req.file) {
         const r = await storage.upload(req.file, 'noticias');
-        imagemUrl = r.urlPublica; imagemPublicId = r.publicId;
+        imagemUrl = r.urlPublica;
+        imagemPublicId = r.publicId;
       }
+
       const noticia = await noticiaRepo.criar({
-        titulo, subtitulo, conteudo, slug: gerarSlug(titulo),
-        imagemUrl, imagemPublicId, categoria: categoria || 'noticias',
-        destaque: destaque === 'true', publicado: publicado === 'true',
-        autor, tags: tags ? JSON.parse(tags) : [],
+        titulo,
+        subtitulo,
+        conteudo,
+        slug: gerarSlug(titulo),
+        imagemUrl,
+        imagemPublicId,
+        categoria: categoria || 'noticias',
+        destaque: destaque === 'true',
+        publicado: publicado === 'true',
+        autor,
+        tags: tags ? JSON.parse(tags) : [],
       });
+
       res.status(201).json(noticia);
-    } catch (e: any) { res.status(400).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(400).json({ erro: e.message });
+    }
   }
 
   async atualizar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
       const dados: any = { ...req.body };
+
       if (dados.destaque !== undefined) dados.destaque = dados.destaque === 'true';
       if (dados.publicado !== undefined) dados.publicado = dados.publicado === 'true';
       if (dados.tags && typeof dados.tags === 'string') dados.tags = JSON.parse(dados.tags);
+
       if (req.file) {
         const r = await storage.upload(req.file, 'noticias');
-        dados.imagemUrl = r.urlPublica; dados.imagemPublicId = r.publicId;
+        dados.imagemUrl = r.urlPublica;
+        dados.imagemPublicId = r.publicId;
       }
-      const noticia = await noticiaRepo.atualizar(req.params.id, dados);
-      if (!noticia) { res.status(404).json({ erro: 'Não encontrado' }); return; }
+
+      const noticia = await noticiaRepo.atualizar(ps(req.params.id), dados);
+
+      if (!noticia) {
+        res.status(404).json({ erro: 'Não encontrado' });
+        return;
+      }
+
       res.json(noticia);
-    } catch (e: any) { res.status(400).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(400).json({ erro: e.message });
+    }
   }
 
   async deletar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
-      await noticiaRepo.deletar(req.params.id);
+      await noticiaRepo.deletar(ps(req.params.id));
       res.json({ mensagem: 'Excluído com sucesso' });
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 }
 
@@ -109,57 +159,87 @@ export class ProjetoControlador {
       const status = qs(req.query.status);
       const categoria = qs(req.query.categoria);
       const destaque = qs(req.query.destaque);
+
       const projetos = await projetoRepo.listar({
         status,
         categoria,
         destaque: destaque === 'true' ? true : undefined,
       });
+
       res.json({ projetos, total: projetos.length });
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 
   async buscarPorId(req: Request, res: Response): Promise<void> {
     try {
-      const projeto = await projetoRepo.buscarPorId(req.params.id);
-      if (!projeto) { res.status(404).json({ erro: 'Não encontrado' }); return; }
+      const projeto = await projetoRepo.buscarPorId(ps(req.params.id));
+
+      if (!projeto) {
+        res.status(404).json({ erro: 'Não encontrado' });
+        return;
+      }
+
       res.json(projeto);
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 
   async criar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
       const dados: any = { ...req.body };
+
       if (dados.destaque !== undefined) dados.destaque = dados.destaque === 'true';
       if (dados.beneficiados) dados.beneficiados = Number(dados.beneficiados);
+
       if (req.file) {
         const r = await storage.upload(req.file, 'projetos');
-        dados.imagemUrl = r.urlPublica; dados.imagemPublicId = r.publicId;
+        dados.imagemUrl = r.urlPublica;
+        dados.imagemPublicId = r.publicId;
       }
+
       const projeto = await projetoRepo.criar(dados);
       res.status(201).json(projeto);
-    } catch (e: any) { res.status(400).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(400).json({ erro: e.message });
+    }
   }
 
   async atualizar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
       const dados: any = { ...req.body };
+
       if (dados.destaque !== undefined) dados.destaque = dados.destaque === 'true';
       if (dados.beneficiados) dados.beneficiados = Number(dados.beneficiados);
+
       if (req.file) {
         const r = await storage.upload(req.file, 'projetos');
-        dados.imagemUrl = r.urlPublica; dados.imagemPublicId = r.publicId;
+        dados.imagemUrl = r.urlPublica;
+        dados.imagemPublicId = r.publicId;
       }
-      const projeto = await projetoRepo.atualizar(req.params.id, dados);
-      if (!projeto) { res.status(404).json({ erro: 'Não encontrado' }); return; }
+
+      const projeto = await projetoRepo.atualizar(ps(req.params.id), dados);
+
+      if (!projeto) {
+        res.status(404).json({ erro: 'Não encontrado' });
+        return;
+      }
+
       res.json(projeto);
-    } catch (e: any) { res.status(400).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(400).json({ erro: e.message });
+    }
   }
 
   async deletar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
-      await projetoRepo.deletar(req.params.id);
+      await projetoRepo.deletar(ps(req.params.id));
       res.json({ mensagem: 'Excluído com sucesso' });
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 }
 
@@ -171,44 +251,76 @@ export class GaleriaControlador {
     try {
       const categoria = qs(req.query.categoria);
       const destaque = qs(req.query.destaque);
+
       const fotos = await galeriaRepo.listar({
         categoria,
         destaque: destaque === 'true' ? true : undefined,
       });
+
       res.json({ fotos, total: fotos.length });
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 
   async criar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
-      if (!req.file) { res.status(400).json({ erro: 'Imagem obrigatória' }); return; }
+      if (!req.file) {
+        res.status(400).json({ erro: 'Imagem obrigatória' });
+        return;
+      }
+
       const r = await storage.upload(req.file, 'galeria');
-      const dados: any = { ...req.body, imagemUrl: r.urlPublica, imagemPublicId: r.publicId };
+
+      const dados: any = {
+        ...req.body,
+        imagemUrl: r.urlPublica,
+        imagemPublicId: r.publicId
+      };
+
       if (dados.destaque !== undefined) dados.destaque = dados.destaque === 'true';
       if (dados.ordem) dados.ordem = Number(dados.ordem);
+
       const foto = await galeriaRepo.criar(dados);
       res.status(201).json(foto);
-    } catch (e: any) { res.status(400).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(400).json({ erro: e.message });
+    }
   }
 
   async atualizar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
       const dados: any = { ...req.body };
+
       if (dados.destaque !== undefined) dados.destaque = dados.destaque === 'true';
       if (dados.ordem) dados.ordem = Number(dados.ordem);
-      const foto = await galeriaRepo.atualizar(req.params.id, dados);
-      if (!foto) { res.status(404).json({ erro: 'Não encontrado' }); return; }
+
+      const foto = await galeriaRepo.atualizar(ps(req.params.id), dados);
+
+      if (!foto) {
+        res.status(404).json({ erro: 'Não encontrado' });
+        return;
+      }
+
       res.json(foto);
-    } catch (e: any) { res.status(400).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(400).json({ erro: e.message });
+    }
   }
 
   async deletar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
-      const foto = await galeriaRepo.buscarPorId(req.params.id);
-      if (foto?.imagemPublicId) await storage.deletar(foto.imagemPublicId, 'image');
-      await galeriaRepo.deletar(req.params.id);
+      const foto = await galeriaRepo.buscarPorId(ps(req.params.id));
+
+      if (foto?.imagemPublicId) {
+        await storage.deletar(foto.imagemPublicId, 'image');
+      }
+
+      await galeriaRepo.deletar(ps(req.params.id));
       res.json({ mensagem: 'Excluído com sucesso' });
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 }
 
@@ -220,21 +332,31 @@ export class DocumentoControlador {
     try {
       const categoria = qs(req.query.categoria);
       const docs = await documentoRepo.listar({ categoria, publico: true });
+
       res.json({ documentos: docs, total: docs.length });
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 
   async listarAdmin(_req: RequestAutenticado, res: Response): Promise<void> {
     try {
       const docs = await documentoRepo.listar({});
       res.json({ documentos: docs, total: docs.length });
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 
   async criar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
-      if (!req.file) { res.status(400).json({ erro: 'Arquivo obrigatório' }); return; }
+      if (!req.file) {
+        res.status(400).json({ erro: 'Arquivo obrigatório' });
+        return;
+      }
+
       const r = await storage.upload(req.file, 'documentos');
+
       const dados: any = {
         ...req.body,
         arquivoUrl: r.urlPublica,
@@ -242,29 +364,48 @@ export class DocumentoControlador {
         nomeArquivo: req.file.originalname,
         tamanho: req.file.size,
       };
+
       if (dados.publico !== undefined) dados.publico = dados.publico === 'true';
+
       const doc = await documentoRepo.criar(dados);
       res.status(201).json(doc);
-    } catch (e: any) { res.status(400).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(400).json({ erro: e.message });
+    }
   }
 
   async atualizar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
       const dados: any = { ...req.body };
+
       if (dados.publico !== undefined) dados.publico = dados.publico === 'true';
-      const doc = await documentoRepo.atualizar(req.params.id, dados);
-      if (!doc) { res.status(404).json({ erro: 'Não encontrado' }); return; }
+
+      const doc = await documentoRepo.atualizar(ps(req.params.id), dados);
+
+      if (!doc) {
+        res.status(404).json({ erro: 'Não encontrado' });
+        return;
+      }
+
       res.json(doc);
-    } catch (e: any) { res.status(400).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(400).json({ erro: e.message });
+    }
   }
 
   async deletar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
-      const doc = await documentoRepo.buscarPorId(req.params.id);
-      if (doc?.arquivoPublicId) await storage.deletar(doc.arquivoPublicId, 'raw');
-      await documentoRepo.deletar(req.params.id);
+      const doc = await documentoRepo.buscarPorId(ps(req.params.id));
+
+      if (doc?.arquivoPublicId) {
+        await storage.deletar(doc.arquivoPublicId, 'raw');
+      }
+
+      await documentoRepo.deletar(ps(req.params.id));
       res.json({ mensagem: 'Excluído com sucesso' });
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 }
 
@@ -275,36 +416,56 @@ export class ContatoControlador {
   async criar(req: Request, res: Response): Promise<void> {
     try {
       const { nome, email, telefone, assunto, mensagem } = req.body;
+
       if (!nome || !email || !assunto || !mensagem) {
-        res.status(400).json({ erro: 'Preencha todos os campos obrigatórios' }); return;
+        res.status(400).json({ erro: 'Preencha todos os campos obrigatórios' });
+        return;
       }
-      const contato = await contatoRepo.criar({ nome, email, telefone, assunto, mensagem, lido: false, respondido: false });
-      res.status(201).json({ mensagem: 'Mensagem enviada com sucesso!', id: contato.id });
-    } catch (e: any) { res.status(400).json({ erro: e.message }); }
+
+      const contato = await contatoRepo.criar({
+        nome, email, telefone, assunto, mensagem,
+        lido: false, respondido: false
+      });
+
+      res.status(201).json({
+        mensagem: 'Mensagem enviada com sucesso!',
+        id: contato.id
+      });
+    } catch (e: any) {
+      res.status(400).json({ erro: e.message });
+    }
   }
 
   async listar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
       const lido = qs(req.query.lido);
+
       const contatos = await contatoRepo.listar({
         lido: lido === 'true' ? true : lido === 'false' ? false : undefined,
       });
+
       res.json({ contatos, total: contatos.length });
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 
   async marcarLido(req: RequestAutenticado, res: Response): Promise<void> {
     try {
-      const contato = await contatoRepo.atualizar(req.params.id, { lido: true });
+      const contato = await contatoRepo.atualizar(ps(req.params.id), { lido: true });
       res.json(contato);
-    } catch (e: any) { res.status(400).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(400).json({ erro: e.message });
+    }
   }
 
   async deletar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
-      await contatoRepo.deletar(req.params.id);
+      await contatoRepo.deletar(ps(req.params.id));
       res.json({ mensagem: 'Excluído' });
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 }
 
@@ -316,49 +477,72 @@ export class MembroControlador {
     try {
       const membros = await membroRepo.listar({ ativo: true });
       res.json({ membros, total: membros.length });
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 
   async listarAdmin(_req: RequestAutenticado, res: Response): Promise<void> {
     try {
       const membros = await membroRepo.listar({});
       res.json({ membros, total: membros.length });
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 
   async criar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
       const dados: any = { ...req.body };
+
       if (dados.ordem) dados.ordem = Number(dados.ordem);
       if (dados.ativo !== undefined) dados.ativo = dados.ativo === 'true';
+
       if (req.file) {
         const r = await storage.upload(req.file, 'membros');
-        dados.fotoUrl = r.urlPublica; dados.fotoPublicId = r.publicId;
+        dados.fotoUrl = r.urlPublica;
+        dados.fotoPublicId = r.publicId;
       }
+
       const membro = await membroRepo.criar(dados);
       res.status(201).json(membro);
-    } catch (e: any) { res.status(400).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(400).json({ erro: e.message });
+    }
   }
 
   async atualizar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
       const dados: any = { ...req.body };
+
       if (dados.ordem) dados.ordem = Number(dados.ordem);
       if (dados.ativo !== undefined) dados.ativo = dados.ativo === 'true';
+
       if (req.file) {
         const r = await storage.upload(req.file, 'membros');
-        dados.fotoUrl = r.urlPublica; dados.fotoPublicId = r.publicId;
+        dados.fotoUrl = r.urlPublica;
+        dados.fotoPublicId = r.publicId;
       }
-      const membro = await membroRepo.atualizar(req.params.id, dados);
-      if (!membro) { res.status(404).json({ erro: 'Não encontrado' }); return; }
+
+      const membro = await membroRepo.atualizar(ps(req.params.id), dados);
+
+      if (!membro) {
+        res.status(404).json({ erro: 'Não encontrado' });
+        return;
+      }
+
       res.json(membro);
-    } catch (e: any) { res.status(400).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(400).json({ erro: e.message });
+    }
   }
 
   async deletar(req: RequestAutenticado, res: Response): Promise<void> {
     try {
-      await membroRepo.deletar(req.params.id);
+      await membroRepo.deletar(ps(req.params.id));
       res.json({ mensagem: 'Excluído' });
-    } catch (e: any) { res.status(500).json({ erro: e.message }); }
+    } catch (e: any) {
+      res.status(500).json({ erro: e.message });
+    }
   }
 }
